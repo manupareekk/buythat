@@ -78,32 +78,45 @@ def _from_c3(p) -> Product | None:
     )
 
 
-def _channel3_search(crop: Image.Image, query: str | None, max_price: float | None, limit: int) -> list[Product]:
+def _c3_query(kw: dict, max_price: float | None, limit: int) -> list[Product]:
     from channel3_sdk import Channel3
     client = Channel3(api_key=os.environ["CHANNEL3_API_KEY"])
-    filters = {"price": {"max_price": max_price}} if max_price else None
-    jobs = [dict(base64image=_b64(crop), limit=limit)]
-    if query:
-        jobs.append(dict(query=query, limit=limit))
+    if max_price:
+        kw = {**kw, "filters": {"price": {"max_price": max_price}}}
+    try:
+        items = client.products.search(**kw, limit=limit).items or []
+    except Exception as e:  # one path failing should not sink the other
+        print("channel3 error:", e)
+        return []
+    return [p for p in (_from_c3(x) for x in items[:limit]) if p]
+
+
+def text_search(query: str | None, max_price: float | None = None, limit: int = 12) -> list[Product]:
+    if not query or not os.environ.get("CHANNEL3_API_KEY"):
+        return []
+    return _c3_query({"query": query}, max_price, limit)
+
+
+def _merge(*lists: list[Product]) -> list[Product]:
     seen, out = set(), []
-
-    def run_safe(kw):
-        try:
-            resp = client.products.search(**{**kw, **({"filters": filters} if filters else {})})
-            items = getattr(resp, "items", None) or getattr(getattr(resp, "response", None), "products", None) or []
-            return list(items)[:limit]
-        except Exception as e:  # one path failing should not sink the other
-            print("channel3 error:", e)
-            return []
-
-    with ThreadPoolExecutor(2) as ex:
-        for batch in ex.map(run_safe, jobs):
-            for raw in batch:
-                p = _from_c3(raw)
-                if p and p.id not in seen:
-                    seen.add(p.id)
-                    out.append(p)
+    for lst in lists:
+        for p in lst:
+            if p.id not in seen:
+                seen.add(p.id)
+                out.append(p)
     return out
+
+
+def _channel3_search(crop: Image.Image, query: str | None, max_price: float | None, limit: int,
+                     text_hits: list[Product] | None = None) -> list[Product]:
+    if text_hits is None:
+        with ThreadPoolExecutor(1) as ex:
+            fut = ex.submit(text_search, query, max_price, limit)
+            img_hits = _c3_query({"base64image": _b64(crop)}, max_price, limit)
+            text_hits = fut.result()
+    else:
+        img_hits = _c3_query({"base64image": _b64(crop)}, max_price, limit)
+    return _merge(img_hits, text_hits)
 
 
 def _mock_search(query: str | None, max_price: float | None, limit: int) -> list[Product]:
@@ -160,9 +173,10 @@ def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img:
     return sorted(keep, key=lambda p: p.score, reverse=True)
 
 
-def search(crop: Image.Image, query: str | None, max_price: float | None = None, limit: int = 12) -> tuple[list[Product], str]:
+def search(crop: Image.Image, query: str | None, max_price: float | None = None, limit: int = 12,
+           text_hits: list[Product] | None = None) -> tuple[list[Product], str]:
     if os.environ.get("CHANNEL3_API_KEY"):
-        cands, source = _channel3_search(crop, query, max_price, limit), "channel3"
+        cands, source = _channel3_search(crop, query, max_price, limit, text_hits), "channel3"
     else:
         cands, source = _mock_search(query, max_price, limit), "mock"
     return rerank(crop, query, cands), source

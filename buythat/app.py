@@ -4,6 +4,7 @@ import os
 import tempfile
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import cv2
@@ -21,6 +22,7 @@ STATIC = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="BuyThat")
 paypal = PayPal()
 PRODUCTS: dict[str, dict] = {}
+POOL = ThreadPoolExecutor(4)
 
 
 def _jpeg_b64(img: Image.Image, max_side: int = 640) -> str:
@@ -64,6 +66,8 @@ async def buy(image: UploadFile = File(...), audio: UploadFile | None = File(Non
     cmd = speech.parse_command(transcript)
     lap("speech")
 
+    # Text search only needs the spoken noun, so it runs on the network while OWLv2 grounds.
+    text_fut = POOL.submit(retrieval.text_search, cmd["target"], cmd["max_price"], 8)
     box, boxes = grounding.ground(frame, cmd["target"])
     lap("grounding")
     if box is None:
@@ -71,7 +75,9 @@ async def buy(image: UploadFile = File(...), audio: UploadFile | None = File(Non
                 "screen": {"found": scr.found, "quad": scr.quad}, "frame": _jpeg_b64(frame),
                 "timings_ms": timings}
     crop = grounding.crop(frame, box)
-    products, source = retrieval.search(crop, cmd["target"] or box.label, cmd["max_price"], limit=8)
+    text_hits = text_fut.result() if cmd["target"] else None
+    products, source = retrieval.search(crop, cmd["target"] or box.label, cmd["max_price"], limit=8,
+                                        text_hits=text_hits)
     lap("retrieval")
 
     out = []

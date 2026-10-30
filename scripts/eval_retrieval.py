@@ -21,8 +21,18 @@ from scripts.make_tv_photo import tv_photo
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "eval" / "out"
+DUP_COS = 0.95
 QUERIES = ["red ski jacket", "white sneakers", "leather handbag", "aviator sunglasses", "denim jacket",
            "wool beanie", "floor lamp", "over-ear headphones", "running shoes", "trench coat"]
+
+
+def _same_product_ids(src: Image.Image, ranked) -> set[str]:
+    """Listings whose photo is a near-duplicate of the source photo: the same product sold under another id."""
+    keep, embs = retrieval._product_embs(list(ranked))
+    if embs is None:
+        return set()
+    sims = (embs @ retrieval._img_embed([src.resize((224, 224))]).T).squeeze(1).tolist()
+    return {c.id for c, s in zip(keep, sims) if s >= DUP_COS}
 
 
 def main(per_query: int = 3):
@@ -54,9 +64,11 @@ def main(per_query: int = 3):
             ranked = retrieval.rerank(crop, noun, list(cands))
             ids_raw = [c.id for c in cands]
             ids_rr = [c.id for c in ranked]
+            same_rr = _same_product_ids(src, ranked)
             rows.append(dict(query=q, product=p.title, id=p.id, screen_found=scr.found, grounded=box is not None,
                              rank_channel3=ids_raw.index(p.id) + 1 if p.id in ids_raw else None,
                              rank_rerank=ids_rr.index(p.id) + 1 if p.id in ids_rr else None,
+                             rank_rerank_dedup=next((i + 1 for i, c in enumerate(ranked) if c.id == p.id or c.id in same_rr), None),
                              latency_s=round(time.perf_counter() - t, 2)))
             print(json.dumps(rows[-1]), flush=True)
     (OUT / "results.json").write_text(json.dumps(rows, indent=1))
@@ -65,8 +77,8 @@ def main(per_query: int = 3):
     def at(key, k):
         return sum(1 for r in rows if r[key] and r[key] <= k) / n
     print(f"\nn={n}  screen_found={sum(r['screen_found'] for r in rows)/n:.2f}  grounded={sum(r['grounded'] for r in rows)/n:.2f}")
-    for key in ("rank_channel3", "rank_rerank"):
-        print(f"{key:14s} top1={at(key,1):.2f} top5={at(key,5):.2f} top12={at(key,12):.2f}")
+    for key in ("rank_channel3", "rank_rerank", "rank_rerank_dedup"):
+        print(f"{key:18s} top1={at(key,1):.2f} top5={at(key,5):.2f} top12={at(key,12):.2f}")
     print(f"median latency {np.median([r['latency_s'] for r in rows]):.1f}s")
 
 
