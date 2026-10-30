@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BuyThat</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header>
+  <div class="brand">BuyThat</div>
+  <div class="meta" id="meta">loading</div>
+</header>
+
+<main>
+  <section class="viewer">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <img id="still" alt="">
+    <div class="hint" id="hint">Point at the TV. Hold the button and say “buy that jacket”.</div>
+  </section>
+
+  <section class="controls">
+    <button id="talk" class="talk" type="button"><span>Hold to talk</span></button>
+    <div class="alt">
+      <input id="text" placeholder="or type: buy that jacket under $150" autocomplete="off">
+      <button id="go" type="button">Go</button>
+    </div>
+    <label class="upload">use a photo instead<input id="file" type="file" accept="image/*" capture="environment"></label>
+  </section>
+
+  <section id="trace" class="trace hidden">
+    <div class="row"><span>heard</span><b id="heard"></b></div>
+    <div class="row"><span>target</span><b id="target"></b></div>
+    <div class="row"><span>screen</span><b id="scr"></b></div>
+    <div class="row"><span>grounding</span><b id="grd"></b></div>
+    <div class="row"><span>catalog</span><b id="src"></b></div>
+    <div class="timings" id="timings"></div>
+  </section>
+
+  <section id="results" class="results"></section>
+
+  <section id="checkout" class="checkout hidden">
+    <div class="sel" id="sel"></div>
+    <div id="paypal-buttons"></div>
+    <div id="receipt" class="receipt hidden"></div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

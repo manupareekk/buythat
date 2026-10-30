@@ -1,0 +1,162 @@
+[
+ {
+  "id": "mock-coco_000000000139-0",
+  "title": "Kestrel Lamp",
+  "brand": "",
+  "image": "img/coco_000000000139_0.jpg",
+  "price": 237.01,
+  "currency": "USD",
+  "retailer": "example-home.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000000139-1",
+  "title": "Juniper Chair",
+  "brand": "",
+  "image": "img/coco_000000000139_1.jpg",
+  "price": 30.11,
+  "currency": "USD",
+  "retailer": "example-sport.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000000139-2",
+  "title": "Northline Dress",
+  "brand": "",
+  "image": "img/coco_000000000139_2.jpg",
+  "price": 103.11,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000000139-3",
+  "title": "Marlow Lamp",
+  "brand": "",
+  "image": "img/coco_000000000139_3.jpg",
+  "price": 68.38,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000000785-0",
+  "title": "Fieldhouse Sunglasses",
+  "brand": "",
+  "image": "img/coco_000000000785_0.jpg",
+  "price": 115.18,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000000785-1",
+  "title": "Northline Jacket",
+  "brand": "",
+  "image": "img/coco_000000000785_1.jpg",
+  "price": 145.74,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000000785-2",
+  "title": "Marlow Hat",
+  "brand": "",
+  "image": "img/coco_000000000785_2.jpg",
+  "price": 47.47,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000001000-0",
+  "title": "Juniper Backpack",
+  "brand": "",
+  "image": "img/coco_000000001000_0.jpg",
+  "price": 163.31,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000001000-1",
+  "title": "Marlow Shirt",
+  "brand": "",
+  "image": "img/coco_000000001000_1.jpg",
+  "price": 153.67,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000001000-2",
+  "title": "Atlas & Co Hat",
+  "brand": "",
+  "image": "img/coco_000000001000_2.jpg",
+  "price": 29.71,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000001000-3",
+  "title": "Kestrel Hat",
+  "brand": "",
+  "image": "img/coco_000000001000_3.jpg",
+  "price": 115.4,
+  "currency": "USD",
+  "retailer": "example-sport.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000002153-0",
+  "title": "Northline Shirt",
+  "brand": "",
+  "image": "img/coco_000000002153_0.jpg",
+  "price": 150.31,
+  "currency": "USD",
+  "retailer": "example-sport.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000002153-1",
+  "title": "Juniper Shirt",
+  "brand": "",
+  "image": "img/coco_000000002153_1.jpg",
+  "price": 60.57,
+  "currency": "USD",
+  "retailer": "example-sport.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000002153-2",
+  "title": "Marlow Shirt",
+  "brand": "",
+  "image": "img/coco_000000002153_2.jpg",
+  "price": 165.95,
+  "currency": "USD",
+  "retailer": "example-home.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000005529-0",
+  "title": "Northline Jacket",
+  "brand": "",
+  "image": "img/coco_000000005529_0.jpg",
+  "price": 144.98,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ },
+ {
+  "id": "mock-coco_000000005529-1",
+  "title": "Marlow Backpack",
+  "brand": "",
+  "image": "img/coco_000000005529_1.jpg",
+  "price": 32.71,
+  "currency": "USD",
+  "retailer": "example-outfitters.com",
+  "url": "https://example.com/"
+ }
+]

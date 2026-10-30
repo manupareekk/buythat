@@ -1,0 +1,154 @@
+"""Product lookup: Channel3 image + text search, re-ranked locally with SigLIP."""
+import base64
+import io
+import json
+import os
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass, field
+from functools import lru_cache
+from pathlib import Path
+
+import httpx
+import torch
+from PIL import Image
+
+SIGLIP_ID = "google/siglip-base-patch16-224"
+MOCK_CATALOG = Path(__file__).resolve().parent.parent / "mock" / "catalog.json"
+
+
+@dataclass
+class Product:
+    id: str
+    title: str
+    brand: str
+    image: str
+    price: float
+    currency: str
+    retailer: str
+    url: str
+    score: float = 0.0
+    signals: dict = field(default_factory=dict)
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@lru_cache(maxsize=1)
+def _siglip():
+    from transformers import AutoModel, AutoProcessor
+    return AutoProcessor.from_pretrained(SIGLIP_ID), AutoModel.from_pretrained(SIGLIP_ID).eval()
+
+
+def _img_embed(images: list[Image.Image]) -> torch.Tensor:
+    proc, model = _siglip()
+    with torch.inference_mode():
+        out = model.get_image_features(**proc(images=images, return_tensors="pt"))
+    out = out if isinstance(out, torch.Tensor) else out.pooler_output
+    return torch.nn.functional.normalize(out, dim=-1)
+
+
+def _txt_embed(texts: list[str]) -> torch.Tensor:
+    proc, model = _siglip()
+    with torch.inference_mode():
+        out = model.get_text_features(**proc(text=texts, padding="max_length", return_tensors="pt"))
+    out = out if isinstance(out, torch.Tensor) else out.pooler_output
+    return torch.nn.functional.normalize(out, dim=-1)
+
+
+def _b64(img: Image.Image) -> str:
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=90)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _from_c3(p) -> Product | None:
+    offers = [o for o in (p.offers or []) if o.price is not None]
+    if not offers:
+        return None
+    o = min(offers, key=lambda o: o.price.price)
+    imgs = p.images or []
+    main = next((i for i in imgs if i.is_main_image), imgs[0] if imgs else None)
+    return Product(
+        id=p.id, title=p.title, brand=(p.brands[0].name if p.brands else ""),
+        image=(main.cleaned_url or main.url) if main else "",
+        price=float(o.price.price), currency=o.price.currency or "USD",
+        retailer=o.domain or "", url=o.url,
+    )
+
+
+def _channel3_search(crop: Image.Image, query: str | None, max_price: float | None, limit: int) -> list[Product]:
+    from channel3_sdk import Channel3
+    client = Channel3(api_key=os.environ["CHANNEL3_API_KEY"])
+    filters = {"price": {"max_price": max_price}} if max_price else None
+    jobs = [dict(base64image=_b64(crop), limit=limit)]
+    if query:
+        jobs.append(dict(query=query, limit=limit))
+    seen, out = set(), []
+
+    def run_safe(kw):
+        try:
+            resp = client.products.search(**{**kw, **({"filters": filters} if filters else {})})
+            items = getattr(resp, "items", None) or getattr(getattr(resp, "response", None), "products", None) or []
+            return list(items)[:limit]
+        except Exception as e:  # one path failing should not sink the other
+            print("channel3 error:", e)
+            return []
+
+    with ThreadPoolExecutor(2) as ex:
+        for batch in ex.map(run_safe, jobs):
+            for raw in batch:
+                p = _from_c3(raw)
+                if p and p.id not in seen:
+                    seen.add(p.id)
+                    out.append(p)
+    return out
+
+
+def _mock_search(query: str | None, max_price: float | None, limit: int) -> list[Product]:
+    items = [Product(**d) for d in json.loads(MOCK_CATALOG.read_text())]
+    if max_price:
+        items = [p for p in items if p.price <= max_price]
+    return items[: limit * 2]
+
+
+def _fetch(url: str) -> Image.Image | None:
+    try:
+        if url.startswith("http"):
+            r = httpx.get(url, timeout=8, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 BuyThat"})
+            r.raise_for_status()
+            return Image.open(io.BytesIO(r.content)).convert("RGB")
+        path = Path(url) if Path(url).is_absolute() else MOCK_CATALOG.parent / url
+        return Image.open(path).convert("RGB")
+    except Exception:
+        return None
+
+
+def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img: float = 0.7) -> list[Product]:
+    """Score = w*cos(crop, product photo) + (1-w)*cos(spoken noun, product photo)."""
+    if not products:
+        return []
+    with ThreadPoolExecutor(8) as ex:
+        thumbs = list(ex.map(lambda p: _fetch(p.image), products))
+    keep = [(p, t) for p, t in zip(products, thumbs) if t is not None]
+    if not keep:
+        return products
+    crop_e = _img_embed([crop])
+    prod_e = _img_embed([t for _, t in keep])
+    img_sim = (prod_e @ crop_e.T).squeeze(1)
+    if query:
+        txt_sim = (prod_e @ _txt_embed([f"a photo of a {query}"]).T).squeeze(1)
+    else:
+        txt_sim = torch.zeros_like(img_sim)
+    wi = w_img if query else 1.0
+    scores = wi * img_sim + (1 - wi) * txt_sim
+    for (p, _), s, si, st in zip(keep, scores.tolist(), img_sim.tolist(), txt_sim.tolist()):
+        p.score, p.signals = round(s, 4), {"visual": round(si, 4), "text": round(st, 4)}
+    return sorted((p for p, _ in keep), key=lambda p: p.score, reverse=True)
+
+
+def search(crop: Image.Image, query: str | None, max_price: float | None = None, limit: int = 12) -> tuple[list[Product], str]:
+    if os.environ.get("CHANNEL3_API_KEY"):
+        cands, source = _channel3_search(crop, query, max_price, limit), "channel3"
+    else:
+        cands, source = _mock_search(query, max_price, limit), "mock"
+    return rerank(crop, query, cands), source
