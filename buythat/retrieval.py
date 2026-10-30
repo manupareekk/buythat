@@ -153,8 +153,17 @@ def _product_embs(products: list[Product]) -> tuple[list[Product], torch.Tensor 
     return keep, (torch.stack([_EMB[p.image] for p in keep]) if keep else None)
 
 
-def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img: float = 0.7) -> list[Product]:
-    """Score = w*cos(crop, product photo) + (1-w)*cos(spoken noun, product photo)."""
+def _z(x: torch.Tensor) -> torch.Tensor:
+    return (x - x.mean()) / (x.std() + 1e-6) if len(x) > 1 else x * 0
+
+
+def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img: float = 0.7,
+           fusion: str | None = None) -> list[Product]:
+    """Score = w*sim(crop, product photo) + (1-w)*sim(spoken noun, product photo).
+
+    fusion="z" standardizes each signal over the candidate set first; SigLIP text-image cosines live
+    on a much smaller scale than image-image ones, so raw sums let the visual term drown the words."""
+    fusion = fusion or os.environ.get("BUYTHAT_FUSION", "raw")
     if not products:
         return []
     keep, prod_e = _product_embs(products)
@@ -167,7 +176,10 @@ def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img:
     else:
         txt_sim = torch.zeros_like(img_sim)
     wi = w_img if query else 1.0
-    scores = wi * img_sim + (1 - wi) * txt_sim
+    if fusion == "z":
+        scores = wi * _z(img_sim) + (1 - wi) * _z(txt_sim)
+    else:
+        scores = wi * img_sim + (1 - wi) * txt_sim
     for p, s, si, st in zip(keep, scores.tolist(), img_sim.tolist(), txt_sim.tolist()):
         p.score, p.signals = round(s, 4), {"visual": round(si, 4), "text": round(st, 4)}
     return sorted(keep, key=lambda p: p.score, reverse=True)
