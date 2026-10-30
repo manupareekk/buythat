@@ -71,7 +71,7 @@ async def buy(image: UploadFile = File(...), audio: UploadFile | None = File(Non
                 "screen": {"found": scr.found, "quad": scr.quad}, "frame": _jpeg_b64(frame),
                 "timings_ms": timings}
     crop = grounding.crop(frame, box)
-    products, source = retrieval.search(crop, cmd["target"] or box.label, cmd["max_price"])
+    products, source = retrieval.search(crop, cmd["target"] or box.label, cmd["max_price"], limit=8)
     lap("retrieval")
 
     out = []

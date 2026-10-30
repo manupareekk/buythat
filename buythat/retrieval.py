@@ -12,6 +12,8 @@ import httpx
 import torch
 from PIL import Image
 
+from .device import DEVICE
+
 SIGLIP_ID = "google/siglip-base-patch16-224"
 MOCK_CATALOG = Path(__file__).resolve().parent.parent / "mock" / "catalog.json"
 
@@ -36,23 +38,23 @@ class Product:
 @lru_cache(maxsize=1)
 def _siglip():
     from transformers import AutoModel, AutoProcessor
-    return AutoProcessor.from_pretrained(SIGLIP_ID), AutoModel.from_pretrained(SIGLIP_ID).eval()
+    return AutoProcessor.from_pretrained(SIGLIP_ID), AutoModel.from_pretrained(SIGLIP_ID).eval().to(DEVICE)
 
 
 def _img_embed(images: list[Image.Image]) -> torch.Tensor:
     proc, model = _siglip()
     with torch.inference_mode():
-        out = model.get_image_features(**proc(images=images, return_tensors="pt"))
+        out = model.get_image_features(**proc(images=images, return_tensors="pt").to(DEVICE))
     out = out if isinstance(out, torch.Tensor) else out.pooler_output
-    return torch.nn.functional.normalize(out, dim=-1)
+    return torch.nn.functional.normalize(out, dim=-1).cpu()
 
 
 def _txt_embed(texts: list[str]) -> torch.Tensor:
     proc, model = _siglip()
     with torch.inference_mode():
-        out = model.get_text_features(**proc(text=texts, padding="max_length", return_tensors="pt"))
+        out = model.get_text_features(**proc(text=texts, padding="max_length", return_tensors="pt").to(DEVICE))
     out = out if isinstance(out, torch.Tensor) else out.pooler_output
-    return torch.nn.functional.normalize(out, dim=-1)
+    return torch.nn.functional.normalize(out, dim=-1).cpu()
 
 
 def _b64(img: Image.Image) -> str:
@@ -123,17 +125,29 @@ def _fetch(url: str) -> Image.Image | None:
         return None
 
 
+_EMB: dict[str, torch.Tensor] = {}
+
+
+def _product_embs(products: list[Product]) -> tuple[list[Product], torch.Tensor | None]:
+    todo = [p for p in products if p.image not in _EMB]
+    with ThreadPoolExecutor(8) as ex:
+        thumbs = list(ex.map(lambda p: _fetch(p.image), todo))
+    ok = [(p, t) for p, t in zip(todo, thumbs) if t is not None]
+    if ok:
+        for (p, _), e in zip(ok, _img_embed([t.resize((224, 224)) for _, t in ok])):
+            _EMB[p.image] = e
+    keep = [p for p in products if p.image in _EMB]
+    return keep, (torch.stack([_EMB[p.image] for p in keep]) if keep else None)
+
+
 def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img: float = 0.7) -> list[Product]:
     """Score = w*cos(crop, product photo) + (1-w)*cos(spoken noun, product photo)."""
     if not products:
         return []
-    with ThreadPoolExecutor(8) as ex:
-        thumbs = list(ex.map(lambda p: _fetch(p.image), products))
-    keep = [(p, t) for p, t in zip(products, thumbs) if t is not None]
+    keep, prod_e = _product_embs(products)
     if not keep:
         return products
     crop_e = _img_embed([crop])
-    prod_e = _img_embed([t for _, t in keep])
     img_sim = (prod_e @ crop_e.T).squeeze(1)
     if query:
         txt_sim = (prod_e @ _txt_embed([f"a photo of a {query}"]).T).squeeze(1)
@@ -141,9 +155,9 @@ def rerank(crop: Image.Image, query: str | None, products: list[Product], w_img:
         txt_sim = torch.zeros_like(img_sim)
     wi = w_img if query else 1.0
     scores = wi * img_sim + (1 - wi) * txt_sim
-    for (p, _), s, si, st in zip(keep, scores.tolist(), img_sim.tolist(), txt_sim.tolist()):
+    for p, s, si, st in zip(keep, scores.tolist(), img_sim.tolist(), txt_sim.tolist()):
         p.score, p.signals = round(s, 4), {"visual": round(si, 4), "text": round(st, 4)}
-    return sorted((p for p, _ in keep), key=lambda p: p.score, reverse=True)
+    return sorted(keep, key=lambda p: p.score, reverse=True)
 
 
 def search(crop: Image.Image, query: str | None, max_price: float | None = None, limit: int = 12) -> tuple[list[Product], str]:

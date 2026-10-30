@@ -6,6 +6,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from .device import DEVICE
+
 MODEL_ID = "google/owlv2-base-patch16-ensemble"
 GENERIC = ["jacket", "shirt", "dress", "shoes", "sneakers", "handbag", "watch", "sunglasses", "hat",
            "lamp", "chair", "sofa", "headphones", "phone", "laptop", "bottle", "mug", "backpack", "car"]
@@ -23,19 +25,19 @@ def _model():
     from transformers import Owlv2ForObjectDetection, Owlv2Processor
     torch.set_num_threads(max(1, torch.get_num_threads()))
     proc = Owlv2Processor.from_pretrained(MODEL_ID)
-    model = Owlv2ForObjectDetection.from_pretrained(MODEL_ID).eval()
+    model = Owlv2ForObjectDetection.from_pretrained(MODEL_ID).eval().to(DEVICE)
     return proc, model
 
 
 def detect(image: Image.Image, phrases: list[str], threshold: float = 0.12) -> list[Box]:
     proc, model = _model()
     queries = [f"a photo of a {p}" for p in phrases]
-    inputs = proc(text=[queries], images=image, return_tensors="pt")
+    inputs = proc(text=[queries], images=image, return_tensors="pt").to(DEVICE)
     with torch.inference_mode():
         out = model(**inputs)
     # OWLv2 pads the image to a square; boxes are relative to the padded size.
     side = max(image.size)
-    res = proc.image_processor.post_process_object_detection(out, threshold=threshold, target_sizes=torch.tensor([[side, side]]))[0]
+    res = proc.image_processor.post_process_object_detection(out, threshold=threshold, target_sizes=torch.tensor([[side, side]], device=DEVICE))[0]
     boxes = []
     for score, label, b in zip(res["scores"].tolist(), res["labels"].tolist(), res["boxes"].tolist()):
         x0, y0, x1, y1 = (int(max(0, v)) for v in b)
