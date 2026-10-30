@@ -2,7 +2,8 @@
 import re
 from functools import lru_cache
 
-FILLERS = {"um", "uh", "like", "please", "now", "right", "the", "a", "an", "one", "thing", "that", "this", "those", "these", "it"}
+FILLERS = {"um", "uh", "like", "please", "now", "right", "the", "a", "an", "one", "thing", "that", "this", "those", "these", "it",
+           "i", "i'm", "im", "i'd", "i'll", "me", "my", "you", "can", "could", "some", "of", "want", "go", "ahead"}
 TRIGGER = re.compile(r"\b(?:buy|get|order|purchase|find|want|shop|grab)\b(?:\s+me)?\s+(?:that|this|those|these|the)?\s*(.*)", re.I)
 PRICE = re.compile(r"\b(?:under|below|less than|max|up to)\s*\$?\s*(\d+(?:\.\d+)?)", re.I)
 SIZE = re.compile(r"\bin (?:a )?size\s+(\w+)|\bsize\s+(\w+)", re.I)
@@ -15,7 +16,8 @@ def _whisper():
 
 
 def transcribe(path: str) -> str:
-    segments, _ = _whisper().transcribe(path, beam_size=1, vad_filter=True, language="en")
+    segments, _ = _whisper().transcribe(path, beam_size=1, vad_filter=True, language="en",
+                                        initial_prompt="Buy that jacket. Get me those sneakers under $100.")
     return " ".join(s.text.strip() for s in segments).strip()
 
 

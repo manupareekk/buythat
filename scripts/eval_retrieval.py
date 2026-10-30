@@ -10,6 +10,7 @@ import os
 import random
 import sys
 import time
+import zlib
 from pathlib import Path
 
 import cv2
@@ -21,6 +22,7 @@ from scripts.make_tv_photo import tv_photo
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "eval" / "out"
+SET = ROOT / "eval" / "set.json"
 DUP_COS = 0.95
 QUERIES = ["red ski jacket", "white sneakers", "leather handbag", "aviator sunglasses", "denim jacket",
            "wool beanie", "floor lamp", "over-ear headphones", "running shoes", "trench coat"]
@@ -40,10 +42,17 @@ def main(per_query: int = 3):
     OUT.mkdir(parents=True, exist_ok=True)
     client = Channel3(api_key=os.environ["CHANNEL3_API_KEY"])
     random.seed(0)
+    if SET.exists():
+        cases = [(c["query"], k, retrieval.Product(**c["product"])) for k, c in enumerate(json.loads(SET.read_text()))]
+    else:
+        cases = []
+        for q in QUERIES:
+            prods = [p for p in (retrieval._from_c3(x) for x in list(client.products.search(query=q, limit=10).items)) if p]
+            cases += [(q, k, p) for k, p in enumerate(random.sample(prods, min(per_query, len(prods))))]
+        SET.write_text(json.dumps([{"query": q, "product": p.to_dict()} for q, _, p in cases], indent=1))
     rows = []
-    for q in QUERIES:
-        prods = [p for p in (retrieval._from_c3(x) for x in list(client.products.search(query=q, limit=10).items)) if p]
-        for k, p in enumerate(random.sample(prods, min(per_query, len(prods)))):
+    for q, k, p in cases:
+        if True:
             src = retrieval._fetch(p.image)
             if src is None:
                 continue
@@ -53,7 +62,7 @@ def main(per_query: int = 3):
             raw = OUT / f"{q.replace(' ', '_')}_{k}_src.jpg"
             canvas.save(raw)
             tv = OUT / f"{q.replace(' ', '_')}_{k}_tv.jpg"
-            tv_photo(str(raw), str(tv), seed=hash((q, k)) % 1000)
+            tv_photo(str(raw), str(tv), seed=zlib.crc32(f"{q}|{p.id}".encode()) % 1000)
             t = time.perf_counter()
             scr = screen.find_screen(cv2.imread(str(tv)))
             frame = Image.fromarray(cv2.cvtColor(scr.frame, cv2.COLOR_BGR2RGB))
@@ -71,7 +80,7 @@ def main(per_query: int = 3):
                              rank_rerank_dedup=next((i + 1 for i, c in enumerate(ranked) if c.id == p.id or c.id in same_rr), None),
                              latency_s=round(time.perf_counter() - t, 2)))
             print(json.dumps(rows[-1]), flush=True)
-    (OUT / "results.json").write_text(json.dumps(rows, indent=1))
+    (OUT / f"results_owl{grounding.SIZE}.json").write_text(json.dumps(rows, indent=1))
     n = len(rows)
 
     def at(key, k):

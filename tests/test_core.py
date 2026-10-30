@@ -13,6 +13,8 @@ from scripts.make_tv_photo import tv_photo
     ("get me those sneakers under $120", "sneakers", 120.0, None),
     ("I want that lamp on the TV", "lamp", None, None),
     ("buy the hoodie in size medium", "hoodie", None, "medium"),
+    ("I'm a red jacket under $500.", "red jacket", 500.0, None),
+    ("Can you get me that lamp", "lamp", None, None),
 ])
 def test_parse_command(text, target, price, size):
     c = speech.parse_command(text)
