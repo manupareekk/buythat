@@ -49,6 +49,8 @@ python -m scripts.eval_retrieval 3
 (perspective, bezel, moire, sensor noise), runs the full pipeline and reports where the original
 product ranks. Results are in [EVAL.md](EVAL.md).
 
+On 30 real Channel3 products shown on synthetic TV photos (CPU only): the screen was found 100% of the time and the target grounded 100%. The exact product came out top-1 17% of the time with Channel3 alone and 37% after the SigLIP re-rank (53% if same-item duplicate listings count as hits). Median latency was 12 s. The bottleneck is recall: from a TV photo the product is in Channel3's top 12 47% of the time, vs 87% from the clean catalog photo.
+
 ## License
 
 MIT

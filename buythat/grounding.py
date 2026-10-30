@@ -76,7 +76,7 @@ def ground(image: Image.Image, target: str | None) -> tuple[Box | None, list[Box
     return max(boxes, key=rank), boxes
 
 
-def crop(image: Image.Image, box: Box, pad: float = 0.08) -> Image.Image:
+def crop(image: Image.Image, box: Box, pad: float = 0.0) -> Image.Image:
     x0, y0, x1, y1 = box.xyxy
     dx, dy = (x1 - x0) * pad, (y1 - y0) * pad
     return image.crop((max(0, x0 - dx), max(0, y0 - dy), min(image.width, x1 + dx), min(image.height, y1 + dy)))
